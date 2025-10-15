@@ -8,6 +8,7 @@ import { UserService } from '../user/user.service';
 import { DatabaseService } from '../database/database.service';
 import * as bcrypt from 'bcryptjs';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 interface JwtPayload {
   sub: number;
   email: string;
@@ -20,15 +21,13 @@ export class AuthService {
     private db: DatabaseService,
   ) {}
 
-  async register(email: string, password: string) {
-    const existing = await this.userService.findByEmail(email);
+  async register(dto: RegisterDto) {
+    const existing = await this.userService.findByEmail(dto.email);
     if (existing) throw new ForbiddenException('Email already used');
-    return await this.userService.createUser(email, password);
+    return await this.userService.createUser(dto.email, dto.password);
   }
 
   public async login(dto: LoginDto) {
- 
-
     const user = await this.userService.findByEmail(dto.email);
     if (!user)
       throw new UnauthorizedException('Такої електронної адреси не існує');
@@ -47,26 +46,24 @@ export class AuthService {
         secret: process.env.JWT_REFRESH_SECRET,
       });
 
-      // Перевіряємо токен у базі
       const tokenFromDb = await this.db.query(
-        `SELECT * FROM user_tokens WHERE user_id = $1 AND refresh_token = $2`,
+        `SELECT * FROM user_tokens WHERE user_id = $1 AND refresh_token = $2 AND expires_at > NOW()`,
         [payload.sub, refreshToken],
       );
 
       if (!tokenFromDb.rows[0])
         throw new ForbiddenException('Invalid refresh token');
 
-      // Видаляємо старий refresh token
-      await this.db.query(
-        `DELETE FROM user_tokens WHERE user_id = $1 AND refresh_token = $2`,
-        [payload.sub, refreshToken],
+      // Генеруємо тільки новий access token
+      const accessToken = await this.jwt.signAsync<JwtPayload>(
+        { sub: payload.sub, email: payload.email },
+        {
+          secret: process.env.JWT_ACCESS_SECRET!,
+          expiresIn: process.env.JWT_ACCESS_EXPIRES_IN! as any,
+        },
       );
 
-      // Генеруємо нові токени
-      const tokens = await this.generateTokens(payload.sub, payload.email);
-      await this.saveRefreshToken(payload.sub, tokens.refreshToken);
-
-      return tokens;
+      return { accessToken, refreshToken }; // refreshToken залишаємо той самий
     } catch {
       throw new ForbiddenException('Invalid refresh token');
     }
@@ -88,13 +85,11 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
   private async saveRefreshToken(userId: number, token: string) {
-    await this.db.query(`DELETE FROM user_tokens WHERE user_id = $1`, [userId]);
     await this.db.query(
-      `INSERT INTO user_tokens (user_id, refresh_token) VALUES ($1, $2)`,
+      `INSERT INTO user_tokens (user_id, refresh_token, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 days')`,
       [userId, token],
     );
   }
-
   async revokeRefreshToken(refreshToken: string) {
     await this.db.query(`DELETE FROM user_tokens WHERE refresh_token = $1`, [
       refreshToken,
