@@ -26,10 +26,11 @@ export class AuthController {
 
     // Встановлюємо refresh token у cookie
     res.cookie('refreshToken', tokens.refreshToken, {
-      httpOnly: true, // не доступно через JS
-      secure: process.env.NODE_ENV === 'production', // тільки через HTTPS у продакшн
-      sameSite: 'lax',
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 днів
+      httpOnly: true,
+      secure: true, // HTTPS обов’язково
+      sameSite: 'none', // для крос-домена
+      domain: '.mira-notes.site', // дозволяє всім субдоменам
+      maxAge: 30 * 24 * 60 * 60 * 1000,
     });
 
     // Повертаємо access token і, якщо хочеш, дані користувача
@@ -53,14 +54,13 @@ export class AuthController {
     if (!refreshToken) throw new ForbiddenException('Refresh token not found');
 
     const tokens = await this.authService.refresh(refreshToken);
-
     res.cookie('refreshToken', tokens.refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: true, // HTTPS обов’язково
+      sameSite: 'none', // для крос-домена
+      domain: '.mira-notes.site', // дозволяє всім субдоменам
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
-
     return { accessToken: tokens.accessToken };
   }
 
