@@ -29,7 +29,7 @@ export class AuthController {
       httpOnly: true,
       secure: true, // HTTPS обов’язково
       sameSite: 'none', // для крос-домена
-      domain: '.mira-notes.site', // дозволяє всім субдоменам
+
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
 
@@ -58,7 +58,7 @@ export class AuthController {
       httpOnly: true,
       secure: true, // HTTPS обов’язково
       sameSite: 'none', // для крос-домена
-      domain: '.mira-notes.site', // дозволяє всім субдоменам
+
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
     return { accessToken: tokens.accessToken };
